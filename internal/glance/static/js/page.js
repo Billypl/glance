@@ -783,4 +783,56 @@ async function setupPage() {
     }
 }
 
+async function setupWidgetBehaviors(root) {
+    setupCarousels(root);
+    setupSearchBoxes(root);
+    setupCollapsibleLists(root);
+    setupCollapsibleGrids(root);
+    setupGroups(root);
+    setupLazyImages(root);
+    setTimeout(() => setupTruncatedElementTitles(root), 50);
+}
+
+function setupLiveUpdates() {
+    if (!pageData.liveUpdates) return;
+
+    const baseURL = pageData.baseURL;
+
+    function scheduleWidget(el) {
+        const nextUpdate = parseInt(el.dataset.nextUpdate, 10);
+        if (!nextUpdate) return;
+        const delay = Math.max(0, nextUpdate - Date.now());
+        setTimeout(() => refreshWidget(el.dataset.widgetId), delay);
+    }
+
+    async function refreshWidget(widgetId) {
+        const el = document.querySelector(`[data-widget-id="${widgetId}"]`);
+        if (!el) return;
+
+        let response;
+        try {
+            response = await fetch(`${baseURL}/api/widgets/${widgetId}/content/`);
+        } catch (_) {
+            setTimeout(() => refreshWidget(widgetId), 30_000);
+            return;
+        }
+        if (!response.ok) return;
+
+        const html = await response.text();
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        const newEl = tmp.firstElementChild;
+        if (!newEl) return;
+
+        el.replaceWith(newEl);
+        setupWidgetBehaviors(newEl);
+        scheduleWidget(newEl);
+    }
+
+    afterContentReady(() => {
+        document.querySelectorAll('[data-widget-id]').forEach(scheduleWidget);
+    });
+}
+
 setupPage();
+setupLiveUpdates();
