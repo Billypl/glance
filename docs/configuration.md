@@ -301,6 +301,7 @@ server:
 | proxied | boolean | no | false |
 | base-url | string | no | |
 | assets-path | string | no |  |
+| live-updates | boolean | no | false |
 
 #### `host`
 The address which the server will listen on. Setting it to `localhost` means that only the machine that the server is running on will be able to access the dashboard. By default it will listen on all interfaces.
@@ -353,6 +354,16 @@ To be able to point to an asset from your assets path, use the `/assets/` path l
 
 ```yaml
 icon: /assets/gitea-icon.png
+```
+
+#### `live-updates`
+When set to `true`, each widget on the page is automatically refreshed in the browser when its cached data expires, without requiring a full page reload. The server embeds the next-refresh timestamp into the rendered HTML; the browser reads it and schedules a fetch for that exact moment.
+
+This is useful for dashboards left open on a wall display or second monitor. It is disabled by default — when disabled, behavior is identical to today, with no additional goroutines or endpoints.
+
+```yaml
+server:
+  live-updates: true
 ```
 
 ## Document
