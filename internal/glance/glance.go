@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -39,9 +38,6 @@ type application struct {
 	widgetByID   map[uint64]widget
 	widgetToPage map[uint64]*page
 
-	hub          *eventHub
-	tickerCancel context.CancelFunc
-
 	RequiresAuth           bool
 	authSecretKey          []byte
 	usernameHashToUsername map[string]string
@@ -57,7 +53,6 @@ func newApplication(c *config) (*application, error) {
 		slugToPage:   make(map[string]*page),
 		widgetByID:   make(map[uint64]widget),
 		widgetToPage: make(map[uint64]*page),
-		hub:          newEventHub(),
 	}
 	config := &app.Config
 
@@ -428,49 +423,6 @@ func (a *application) handleWidgetRequest(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-func (a *application) handleSSERequest(w http.ResponseWriter, r *http.Request) {
-	if a.handleUnauthorizedResponse(w, r, showUnauthorizedJSON) {
-		return
-	}
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-
-	ch := a.hub.register()
-	defer a.hub.unregister(ch)
-
-	pingTicker := time.NewTicker(30 * time.Second)
-	defer pingTicker.Stop()
-
-	for {
-		select {
-		case e, ok := <-ch:
-			if !ok {
-				return
-			}
-			data, err := json.Marshal(e)
-			if err != nil {
-				continue
-			}
-			fmt.Fprintf(w, "event: %s\ndata: %s\n\n", e.Type, data)
-			flusher.Flush()
-		case <-pingTicker.C:
-			fmt.Fprintf(w, ": ping\n\n")
-			flusher.Flush()
-		case <-r.Context().Done():
-			return
-		}
-	}
-}
-
 func (a *application) handleWidgetContentRequest(w http.ResponseWriter, r *http.Request) {
 	if a.handleUnauthorizedResponse(w, r, showUnauthorizedJSON) {
 		return
@@ -492,6 +444,10 @@ func (a *application) handleWidgetContentRequest(w http.ResponseWriter, r *http.
 
 	var html string
 	p.mu.Lock()
+	now := time.Now()
+	if wgt.requiresUpdate(&now) {
+		wgt.update(r.Context())
+	}
 	html = string(wgt.Render())
 	p.mu.Unlock()
 
@@ -521,7 +477,6 @@ func (a *application) server() (func() error, func() error) {
 	}
 
 	if a.Config.Server.LiveUpdates {
-		mux.HandleFunc("GET /api/events", a.handleSSERequest)
 		mux.HandleFunc("GET /api/widgets/{id}/content/", a.handleWidgetContentRequest)
 	}
 
@@ -588,17 +543,7 @@ func (a *application) server() (func() error, func() error) {
 		return nil
 	}
 
-	if a.Config.Server.LiveUpdates {
-		tickerCtx, cancel := context.WithCancel(context.Background())
-		a.tickerCancel = cancel
-		a.startLiveUpdateTicker(tickerCtx)
-	}
-
 	stop := func() error {
-		a.hub.close()
-		if a.tickerCancel != nil {
-			a.tickerCancel()
-		}
 		return server.Close()
 	}
 

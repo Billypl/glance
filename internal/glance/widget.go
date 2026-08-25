@@ -174,6 +174,13 @@ type widgetProviders struct {
 	assetResolver func(string) string
 }
 
+func (w *widgetBase) NextUpdateUnixMilli() int64 {
+	if w.cacheType == cacheTypeInfinite || w.nextUpdate.IsZero() {
+		return 0
+	}
+	return w.nextUpdate.UnixMilli()
+}
+
 func (w *widgetBase) requiresUpdate(now *time.Time) bool {
 	if w.cacheType == cacheTypeInfinite {
 		return false
