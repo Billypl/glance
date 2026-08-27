@@ -719,3 +719,57 @@ func (f *filterableFields[T]) UnmarshalYAML(node *yaml.Node) error {
 
 	return nil
 }
+
+const (
+	defaultLiveUpdateTickInterval = 10 * time.Second
+	defaultLiveUpdatePingInterval = 30 * time.Second
+	defaultLiveUpdateDebounceMs   = 500
+)
+
+type liveUpdatesField struct {
+	Enabled          bool          `yaml:"enabled"`
+	TickInterval     durationField `yaml:"tick-interval"`
+	PingInterval     durationField `yaml:"ping-interval"`
+	ClientDebounceMs int           `yaml:"client-debounce-ms"`
+	PauseWhenIdle    *bool         `yaml:"pause-when-idle"`
+}
+
+func (f *liveUpdatesField) UnmarshalYAML(node *yaml.Node) error {
+	type liveUpdatesFieldAlias liveUpdatesField
+	var enabled bool
+
+	if err := node.Decode(&enabled); err == nil {
+		f.Enabled = enabled
+	} else if err := node.Decode((*liveUpdatesFieldAlias)(f)); err != nil {
+		return err
+	}
+
+	f.applyDefaults()
+	return f.validate()
+}
+
+func (f *liveUpdatesField) applyDefaults() {
+	if f.TickInterval == 0 {
+		f.TickInterval = durationField(defaultLiveUpdateTickInterval)
+	}
+	if f.PingInterval == 0 {
+		f.PingInterval = durationField(defaultLiveUpdatePingInterval)
+	}
+	if f.ClientDebounceMs == 0 {
+		f.ClientDebounceMs = defaultLiveUpdateDebounceMs
+	}
+	if f.PauseWhenIdle == nil {
+		t := true
+		f.PauseWhenIdle = &t
+	}
+}
+
+func (f *liveUpdatesField) validate() error {
+	if time.Duration(f.TickInterval) < time.Second {
+		return fmt.Errorf("live-updates tick-interval must be at least 1s")
+	}
+	if f.ClientDebounceMs < 0 {
+		return fmt.Errorf("live-updates client-debounce-ms must be >= 0")
+	}
+	return nil
+}

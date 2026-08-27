@@ -447,7 +447,7 @@ func (a *application) handleSSERequest(w http.ResponseWriter, r *http.Request) {
 	ch := a.hub.register()
 	defer a.hub.unregister(ch)
 
-	pingTicker := time.NewTicker(30 * time.Second)
+	pingTicker := time.NewTicker(time.Duration(a.Config.Server.LiveUpdates.PingInterval))
 	defer pingTicker.Stop()
 
 	for {
@@ -520,7 +520,7 @@ func (a *application) server() (func() error, func() error) {
 		mux.HandleFunc("POST /api/set-theme/{key}", a.handleThemeChangeRequest)
 	}
 
-	if a.Config.Server.LiveUpdates {
+	if a.Config.Server.LiveUpdates.Enabled {
 		mux.HandleFunc("GET /api/events", a.handleSSERequest)
 		mux.HandleFunc("GET /api/widgets/{id}/content/", a.handleWidgetContentRequest)
 	}
@@ -588,7 +588,7 @@ func (a *application) server() (func() error, func() error) {
 		return nil
 	}
 
-	if a.Config.Server.LiveUpdates {
+	if a.Config.Server.LiveUpdates.Enabled {
 		tickerCtx, cancel := context.WithCancel(context.Background())
 		a.tickerCancel = cancel
 		a.startLiveUpdateTicker(tickerCtx)

@@ -10,12 +10,21 @@ import (
 )
 
 func newTestApp() *application {
-	return &application{
+	app := &application{
 		slugToPage:   make(map[string]*page),
 		widgetByID:   make(map[uint64]widget),
 		widgetToPage: make(map[uint64]*page),
 		hub:          newEventHub(),
 	}
+	app.Config.Server.LiveUpdates = liveUpdatesField{
+		Enabled:          true,
+		TickInterval:     durationField(100 * time.Millisecond),
+		PingInterval:     durationField(100 * time.Millisecond),
+		ClientDebounceMs: defaultLiveUpdateDebounceMs,
+	}
+	t := true
+	app.Config.Server.LiveUpdates.PauseWhenIdle = &t
+	return app
 }
 
 func TestSSEEndpointUnauthorized(t *testing.T) {

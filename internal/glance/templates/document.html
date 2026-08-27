@@ -8,7 +8,8 @@
         /*{{ if .Page }}*/slug: "{{ .Page.Slug }}",/*{{ end }}*/
         baseURL: "{{ .App.Config.Server.BaseURL }}",
         theme: "{{ .Request.Theme.Key }}",
-        liveUpdates: {{ .App.Config.Server.LiveUpdates }},
+        liveUpdates: {{ .App.Config.Server.LiveUpdates.Enabled }},
+        liveUpdateDebounceMs: {{ .App.Config.Server.LiveUpdates.ClientDebounceMs }},
     };
     </script>
     <title>{{ block "document-title" . }}{{ end }}</title>

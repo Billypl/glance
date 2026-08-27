@@ -301,7 +301,7 @@ server:
 | proxied | boolean | no | false |
 | base-url | string | no | |
 | assets-path | string | no |  |
-| live-updates | boolean | no | false |
+| live-updates | boolean or object | no | false |
 
 #### `host`
 The address which the server will listen on. Setting it to `localhost` means that only the machine that the server is running on will be able to access the dashboard. By default it will listen on all interfaces.
@@ -345,12 +345,38 @@ The path to a directory that will be served by the server under the `/assets/` p
 #### `live-updates`
 When set to `true`, Glance pushes widget updates to the browser via [Server-Sent Events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) (SSE) so the dashboard refreshes without a full page reload. Disabled by default.
 
+The shorthand `live-updates: true` uses all defaults. For fine-grained control, use the object form:
+
+| Name | Type | Required | Default |
+| ---- | ---- | -------- | ------- |
+| enabled | boolean | no | false |
+| tick-interval | string | no | 10s |
+| ping-interval | string | no | 30s |
+| client-debounce-ms | number | no | 500 |
+| pause-when-idle | boolean | no | true |
+
+Both forms of configuration:
+
+```yaml
+server:
+  live-updates: true          # shorthand, all defaults
+
+server:
+  live-updates:               # full form
+    enabled: true
+    tick-interval: 10s
+    ping-interval: 30s
+    client-debounce-ms: 500
+    pause-when-idle: true
+```
+
 How it works:
 
-- A background ticker checks each widget's cache expiry every 10 seconds. A widget is only fetched from its upstream source when its configured `cache` duration has elapsed — the tick interval does **not** override per-widget cache settings.
+- A background ticker checks each widget's cache expiry at the rate set by `tick-interval`. `tick-interval` is a lower bound on update latency — the effective refresh frequency is still governed by each widget's `cache` setting. A widget with `cache: 1h` will not be fetched more than once per hour regardless of `tick-interval`.
 - After an update, the rendered HTML of the widget is compared with the previous render. An event is sent to connected browsers only when the content actually changed.
 - The browser opens a persistent SSE connection to `{base-url}/api/events`. On receiving a `widget-updated` event it fetches the new HTML for that widget from `{base-url}/api/widgets/{id}/content/` and replaces the widget in the DOM.
-- Multiple events for the same widget that arrive within 500 ms are coalesced into a single fetch.
+- Multiple events for the same widget that arrive within `client-debounce-ms` milliseconds are coalesced into a single fetch.
+- When `pause-when-idle` is `true` (the default), the background ticker skips all work while no browsers have the dashboard open, eliminating unnecessary upstream requests.
 
 **Reverse proxy considerations:** SSE requires a long-lived HTTP connection. Make sure your proxy does not apply a short read or request timeout to this path. For nginx, the `X-Accel-Buffering: no` header (sent automatically by Glance) disables proxy buffering. For other proxies, you may need to disable buffering explicitly or increase idle connection timeouts.
 

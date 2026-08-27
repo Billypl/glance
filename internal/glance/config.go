@@ -34,7 +34,7 @@ type config struct {
 		Proxied     bool   `yaml:"proxied"`
 		AssetsPath  string `yaml:"assets-path"`
 		BaseURL     string `yaml:"base-url"`
-		LiveUpdates bool   `yaml:"live-updates"`
+		LiveUpdates liveUpdatesField `yaml:"live-updates"`
 	} `yaml:"server"`
 
 	Auth struct {

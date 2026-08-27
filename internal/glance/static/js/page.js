@@ -797,6 +797,7 @@ function setupLiveUpdates() {
     if (!pageData.liveUpdates) return;
 
     const baseURL = pageData.baseURL;
+    const debounceMs = pageData.liveUpdateDebounceMs ?? 500;
     const pendingUpdates = new Map();
 
     const source = new EventSource(`${baseURL}/api/events`);
@@ -831,7 +832,7 @@ function setupLiveUpdates() {
 
             el.replaceWith(newEl);
             setupWidgetBehaviors(newEl);
-        }, 500));
+        }, debounceMs));
     });
 
     source.onerror = () => {};

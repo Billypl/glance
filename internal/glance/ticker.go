@@ -7,11 +7,9 @@ import (
 	"time"
 )
 
-const liveUpdateTickInterval = 10 * time.Second
-
 func (a *application) startLiveUpdateTicker(ctx context.Context) {
 	go func() {
-		ticker := time.NewTicker(liveUpdateTickInterval)
+		ticker := time.NewTicker(time.Duration(a.Config.Server.LiveUpdates.TickInterval))
 		defer ticker.Stop()
 
 		for {
