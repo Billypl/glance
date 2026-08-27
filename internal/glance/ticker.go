@@ -32,16 +32,16 @@ func (a *application) tickAllPages(ctx context.Context) {
 	}
 
 	seen := make(map[*page]struct{})
-	for _, p := range a.slugToPage {
+	for slug, p := range a.slugToPage {
 		if _, ok := seen[p]; ok {
 			continue
 		}
 		seen[p] = struct{}{}
-		a.tickPage(ctx, p)
+		a.tickPage(ctx, p, slug)
 	}
 }
 
-func (a *application) tickPage(ctx context.Context, p *page) {
+func (a *application) tickPage(ctx context.Context, p *page, slug string) {
 	now := time.Now()
 
 	// Brief scan: collect stale widget candidates without holding the lock
@@ -92,6 +92,7 @@ func (a *application) tickPage(ctx context.Context, p *page) {
 				a.hub.publish(event{
 					Type:     "widget-updated",
 					WidgetID: w.GetID(),
+					PageSlug: slug,
 					Time:     now,
 				})
 			}

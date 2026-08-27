@@ -8,6 +8,7 @@ import (
 type event struct {
 	Type     string    `json:"type"`
 	WidgetID uint64    `json:"widgetId"`
+	PageSlug string    `json:"pageSlug"`
 	Time     time.Time `json:"time"`
 }
 

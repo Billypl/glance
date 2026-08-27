@@ -847,6 +847,7 @@ function setupLiveUpdates() {
 
     source.addEventListener('widget-updated', (e) => {
         const data = JSON.parse(e.data);
+        if (data.pageSlug && data.pageSlug !== pageData.slug) return;
         const widgetID = data.widgetId;
 
         if (pendingUpdates.has(widgetID)) {
@@ -880,7 +881,7 @@ function setupLiveUpdates() {
         }, debounceMs));
     });
 
-    source.onerror = () => {};
+    source.onerror = (e) => { console.warn('SSE connection error', e); };
 }
 
 setupPage();

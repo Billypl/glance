@@ -45,7 +45,7 @@ func TestTickerSkipsUpToDateWidgets(t *testing.T) {
 	p.HeadWidgets = widgets{fw}
 	app.slugToPage["test"] = p
 
-	app.tickPage(context.Background(), p)
+	app.tickPage(context.Background(), p, "test")
 
 	if n := fw.updateCount.Load(); n != 0 {
 		t.Errorf("expected 0 updates for fresh widget, got %d", n)
@@ -60,7 +60,7 @@ func TestTickerUpdatesStaleWidget(t *testing.T) {
 	p.HeadWidgets = widgets{fw}
 	app.slugToPage["test"] = p
 
-	app.tickPage(context.Background(), p)
+	app.tickPage(context.Background(), p, "test")
 
 	if n := fw.updateCount.Load(); n != 1 {
 		t.Errorf("expected 1 update for stale widget, got %d", n)
@@ -80,7 +80,7 @@ func TestTickerEmitsEventOnChange(t *testing.T) {
 
 	ch := app.hub.register()
 
-	app.tickPage(context.Background(), p)
+	app.tickPage(context.Background(), p, "test")
 
 	select {
 	case e := <-ch:
@@ -106,7 +106,7 @@ func TestTickerNoEventWhenContentUnchanged(t *testing.T) {
 
 	ch := app.hub.register()
 
-	app.tickPage(context.Background(), p)
+	app.tickPage(context.Background(), p, "test")
 
 	select {
 	case e := <-ch:
