@@ -115,3 +115,55 @@ func TestTickerNoEventWhenContentUnchanged(t *testing.T) {
 		// correct: no event
 	}
 }
+
+func TestTickerSkipsWhenNoClients(t *testing.T) {
+	app := newTestApp()
+	// PauseWhenIdle=true by default in newTestApp
+	p := &page{}
+
+	fw := newFakeWidget(time.Now().Add(-time.Minute), "<div>stale</div>")
+	p.HeadWidgets = widgets{fw}
+	app.slugToPage["test"] = p
+
+	app.tickAllPages(context.Background())
+
+	if n := fw.updateCount.Load(); n != 0 {
+		t.Errorf("expected 0 updates with no SSE clients, got %d", n)
+	}
+}
+
+func TestTickerRunsWhenClientConnected(t *testing.T) {
+	app := newTestApp()
+	p := &page{}
+
+	fw := newFakeWidget(time.Now().Add(-time.Minute), "<div>stale</div>")
+	p.HeadWidgets = widgets{fw}
+	app.slugToPage["test"] = p
+
+	ch := app.hub.register()
+	defer app.hub.unregister(ch)
+
+	app.tickAllPages(context.Background())
+
+	if n := fw.updateCount.Load(); n != 1 {
+		t.Errorf("expected 1 update with SSE client connected, got %d", n)
+	}
+}
+
+func TestTickerPauseWhenIdleFalse(t *testing.T) {
+	app := newTestApp()
+	f := false
+	app.Config.Server.LiveUpdates.PauseWhenIdle = &f
+
+	p := &page{}
+	fw := newFakeWidget(time.Now().Add(-time.Minute), "<div>stale</div>")
+	p.HeadWidgets = widgets{fw}
+	app.slugToPage["test"] = p
+
+	// no clients connected
+	app.tickAllPages(context.Background())
+
+	if n := fw.updateCount.Load(); n != 1 {
+		t.Errorf("expected 1 update when pause-when-idle=false, got %d", n)
+	}
+}

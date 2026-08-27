@@ -23,7 +23,15 @@ func (a *application) startLiveUpdateTicker(ctx context.Context) {
 	}()
 }
 
+func (a *application) pauseWhenIdle() bool {
+	return a.Config.Server.LiveUpdates.PauseWhenIdle != nil && *a.Config.Server.LiveUpdates.PauseWhenIdle
+}
+
 func (a *application) tickAllPages(ctx context.Context) {
+	if a.pauseWhenIdle() && a.hub.clientCount() == 0 {
+		return
+	}
+
 	seen := make(map[*page]struct{})
 	for _, p := range a.slugToPage {
 		if _, ok := seen[p]; ok {
