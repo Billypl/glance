@@ -100,7 +100,26 @@ You should see `: ping` lines every 30 seconds when idle.
    ```
    The goroutine count should return to baseline after each reload.
 
-### 10. Auth enforcement (if auth is configured)
+### 10. DOM morphing — widget state preserved across updates
+
+Widget updates use in-place DOM patching rather than full replacement, so
+interactive state is preserved.
+
+**Group widget tab:**
+
+1. Add a group widget with at least two child widgets to the test config.
+2. In the browser, click to the second tab.
+3. Bump the counter (or wait for the ticker to fire) so the group widget refreshes.
+4. The active tab should remain on the second tab — not jump back to the first.
+
+**Carousel scroll:**
+
+1. Open a widget that contains a carousel (e.g. a bookmarks widget with many items).
+2. Scroll the carousel partially to the right.
+3. Trigger a widget refresh.
+4. The carousel scroll position should be preserved after the update.
+
+### 11. Auth enforcement (if auth is configured)
 
 Add auth to the test config:
 

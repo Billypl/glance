@@ -2,6 +2,7 @@ import { setupPopovers } from './popover.js';
 import { setupMasonries } from './masonry.js';
 import { throttledDebounce, isElementVisible, openURLInNewTab } from './utils.js';
 import { elem, find, findAll } from './templating.js';
+import { morph } from './morph.js';
 
 async function fetchPageContent(pageData) {
     // TODO: handle non 200 status codes/time outs
@@ -783,13 +784,55 @@ async function setupPage() {
     }
 }
 
+function captureWidgetState(el) {
+    const state = {};
+
+    if (el.classList.contains('widget-type-group')) {
+        const header = el.getElementsByClassName('widget-header')[0];
+        if (header) {
+            const titles = header.children;
+            for (let i = 0; i < titles.length; i++) {
+                if (titles[i].classList.contains('widget-group-title-current')) {
+                    state.groupTabIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    const carousels = el.getElementsByClassName('carousel-items-container');
+    if (carousels.length > 0) {
+        state.carouselScrolls = Array.from(carousels, c => c.scrollLeft);
+    }
+
+    return state;
+}
+
+function restoreWidgetState(el, state) {
+    if (state.groupTabIndex > 0) {
+        const header = el.getElementsByClassName('widget-header')[0];
+        if (header && state.groupTabIndex < header.children.length) {
+            header.children[state.groupTabIndex].click();
+        }
+    }
+
+    if (state.carouselScrolls) {
+        const carousels = el.getElementsByClassName('carousel-items-container');
+        state.carouselScrolls.forEach((scrollLeft, i) => {
+            if (carousels[i]) carousels[i].scrollLeft = scrollLeft;
+        });
+    }
+}
+
 async function setupWidgetBehaviors(root) {
+    setupPopovers(root);
     setupCarousels(root);
     setupSearchBoxes(root);
     setupCollapsibleLists(root);
     setupCollapsibleGrids(root);
     setupGroups(root);
     setupLazyImages(root);
+    updateRelativeTimeForElements(root.querySelectorAll("[data-dynamic-relative-time]"));
     setTimeout(() => setupTruncatedElementTitles(root), 50);
 }
 
@@ -830,8 +873,10 @@ function setupLiveUpdates() {
             const newEl = tmp.firstElementChild;
             if (!newEl) return;
 
-            el.replaceWith(newEl);
-            setupWidgetBehaviors(newEl);
+            const state = captureWidgetState(el);
+            morph(el, newEl);
+            await setupWidgetBehaviors(el);
+            restoreWidgetState(el, state);
         }, debounceMs));
     });
 
