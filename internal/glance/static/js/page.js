@@ -784,14 +784,74 @@ async function setupPage() {
     }
 }
 
-async function setupWidgetBehaviors(root) {
-    setupCarousels(root);
-    setupSearchBoxes(root);
-    setupCollapsibleLists(root);
-    setupCollapsibleGrids(root);
-    setupGroups(root);
-    setupLazyImages(root);
-    setTimeout(() => setupTruncatedElementTitles(root), 50);
+function setupWidgetBehaviors(root) {
+    const carousels = root.querySelectorAll(".carousel-container");
+    for (const carousel of carousels) {
+        carousel.classList.add("show-right-cutoff");
+        const itemsContainer = carousel.getElementsByClassName("carousel-items-container")[0];
+        if (!itemsContainer) continue;
+        const determineSideCutoffs = () => {
+            carousel.classList.toggle("show-left-cutoff", itemsContainer.scrollLeft != 0);
+            carousel.classList.toggle("show-right-cutoff",
+                Math.ceil(itemsContainer.scrollLeft) + itemsContainer.clientWidth < itemsContainer.scrollWidth);
+        };
+        const rateLimited = throttledDebounce(determineSideCutoffs, 20, 100);
+        itemsContainer.addEventListener("scroll", rateLimited);
+    }
+
+    for (const list of root.querySelectorAll(".list.collapsible-container")) {
+        if (list.dataset.collapseAfter === undefined) continue;
+        const collapseAfter = parseInt(list.dataset.collapseAfter);
+        if (collapseAfter == -1 || list.children.length <= collapseAfter) continue;
+        attachExpandToggleButton(list);
+        for (let c = collapseAfter; c < list.children.length; c++) {
+            const child = list.children[c];
+            child.classList.add("collapsible-item");
+            child.style.animationDelay = ((c - collapseAfter) * 20) + "ms";
+        }
+    }
+
+    for (const grid of root.querySelectorAll(".cards-grid.collapsible-container")) {
+        if (grid.dataset.collapseAfterRows === undefined) continue;
+        const collapseAfterRows = parseInt(grid.dataset.collapseAfterRows);
+        if (collapseAfterRows == -1) continue;
+        const getCardsPerRow = () => parseInt(getComputedStyle(grid).getPropertyValue('--cards-per-row'));
+        const button = attachExpandToggleButton(grid);
+        const setCollapsedItems = () => {
+            const collapseAfter = collapseAfterRows * getCardsPerRow();
+            if (grid.children.length <= collapseAfter) {
+                button.style.display = "none";
+                return;
+            }
+            button.style.removeProperty("display");
+            for (let i = 0; i < grid.children.length; i++) {
+                grid.children[i].classList.toggle("collapsible-item", i >= collapseAfter);
+            }
+        };
+        setCollapsedItems();
+    }
+
+    for (const image of root.querySelectorAll("img[loading=lazy]")) {
+        if (image.complete) {
+            image.classList.add("cached");
+            setTimeout(() => image.classList.add("finished-transition"), 1);
+        } else {
+            image.addEventListener("load", () => {
+                image.classList.add("loaded");
+                setTimeout(() => image.classList.add("finished-transition"), 400);
+            });
+        }
+    }
+
+    const relTimeElements = root.querySelectorAll("[data-dynamic-relative-time]");
+    updateRelativeTimeForElements(relTimeElements);
+
+    setTimeout(() => {
+        for (const el of root.querySelectorAll(".text-truncate, .single-line-titles .title, .text-truncate-2-lines, .text-truncate-3-lines")) {
+            if (el.getAttribute("title") === null)
+                el.title = el.innerText.trim().replace(/\s+/g, " ");
+        }
+    }, 50);
 }
 
 function setupLiveUpdates() {
