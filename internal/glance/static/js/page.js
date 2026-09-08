@@ -2,6 +2,7 @@ import { setupPopovers } from './popover.js';
 import { setupMasonries } from './masonry.js';
 import { throttledDebounce, isElementVisible, openURLInNewTab } from './utils.js';
 import { elem, find, findAll } from './templating.js';
+import { morph } from './morph.js';
 
 async function fetchPageContent(pageData) {
     // TODO: handle non 200 status codes/time outs
@@ -12,8 +13,8 @@ async function fetchPageContent(pageData) {
     return content;
 }
 
-function setupCarousels() {
-    const carouselElements = document.getElementsByClassName("carousel-container");
+function setupCarousels(root = document) {
+    const carouselElements = root.getElementsByClassName("carousel-container");
 
     if (carouselElements.length == 0) {
         return;
@@ -95,8 +96,8 @@ function updateRelativeTimeForElements(elements)
     }
 }
 
-function setupSearchBoxes() {
-    const searchWidgets = document.getElementsByClassName("search");
+function setupSearchBoxes(root = document) {
+    const searchWidgets = root.getElementsByClassName("search");
 
     if (searchWidgets.length == 0) {
         return;
@@ -249,8 +250,8 @@ function setupDynamicRelativeTime() {
     });
 }
 
-function setupGroups() {
-    const groups = document.getElementsByClassName("widget-type-group");
+function setupGroups(root = document) {
+    const groups = root.getElementsByClassName("widget-type-group");
 
     if (groups.length == 0) {
         return;
@@ -309,8 +310,8 @@ function setupGroups() {
     }
 }
 
-function setupLazyImages() {
-    const images = document.querySelectorAll("img[loading=lazy]");
+function setupLazyImages(root = document) {
+    const images = root.querySelectorAll("img[loading=lazy]");
 
     if (images.length == 0) {
         return;
@@ -384,8 +385,8 @@ function attachExpandToggleButton(collapsibleContainer) {
 };
 
 
-function setupCollapsibleLists() {
-    const collapsibleLists = document.querySelectorAll(".list.collapsible-container");
+function setupCollapsibleLists(root = document) {
+    const collapsibleLists = root.querySelectorAll(".list.collapsible-container");
 
     if (collapsibleLists.length == 0) {
         return;
@@ -418,8 +419,8 @@ function setupCollapsibleLists() {
     }
 }
 
-function setupCollapsibleGrids() {
-    const collapsibleGridElements = document.querySelectorAll(".cards-grid.collapsible-container");
+function setupCollapsibleGrids(root = document) {
+    const collapsibleGridElements = root.querySelectorAll(".cards-grid.collapsible-container");
 
     if (collapsibleGridElements.length == 0) {
         return;
@@ -654,8 +655,8 @@ async function setupTodos() {
     }
 }
 
-function setupTruncatedElementTitles() {
-    const elements = document.querySelectorAll(".text-truncate, .single-line-titles .title, .text-truncate-2-lines, .text-truncate-3-lines");
+function setupTruncatedElementTitles(root = document) {
+    const elements = root.querySelectorAll(".text-truncate, .single-line-titles .title, .text-truncate-2-lines, .text-truncate-3-lines");
 
     if (elements.length == 0) {
         return;
@@ -784,80 +785,83 @@ async function setupPage() {
     }
 }
 
+function captureWidgetState(el) {
+    const state = {};
+
+    if (el.classList.contains('widget-type-group')) {
+        const header = el.getElementsByClassName('widget-header')[0];
+        if (header) {
+            const titles = header.children;
+            for (let i = 0; i < titles.length; i++) {
+                if (titles[i].classList.contains('widget-group-title-current')) {
+                    state.groupTabIndex = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    const carousels = el.getElementsByClassName('carousel-items-container');
+    if (carousels.length > 0) {
+        state.carouselScrolls = Array.from(carousels, c => c.scrollLeft);
+    }
+
+    const expanded = el.querySelectorAll('.collapsible-container.container-expanded');
+    if (expanded.length > 0) {
+        const allContainers = el.querySelectorAll('.collapsible-container');
+        state.expandedIndices = Array.from(expanded, exp =>
+            Array.from(allContainers).indexOf(exp)
+        );
+    }
+
+    return state;
+}
+
+function restoreWidgetState(el, state) {
+    if (state.groupTabIndex > 0) {
+        const header = el.getElementsByClassName('widget-header')[0];
+        if (header && state.groupTabIndex < header.children.length) {
+            header.children[state.groupTabIndex].click();
+        }
+    }
+
+    if (state.carouselScrolls) {
+        const carousels = el.getElementsByClassName('carousel-items-container');
+        state.carouselScrolls.forEach((scrollLeft, i) => {
+            if (carousels[i]) carousels[i].scrollLeft = scrollLeft;
+        });
+    }
+
+    if (state.expandedIndices) {
+        const allContainers = el.querySelectorAll('.collapsible-container');
+        for (const idx of state.expandedIndices) {
+            const container = allContainers[idx];
+            if (!container) continue;
+            const toggle = container.nextElementSibling;
+            if (toggle && toggle.classList.contains('expand-toggle-button')) {
+                toggle.click();
+            }
+        }
+    }
+}
+
 function setupWidgetBehaviors(root) {
-    const carousels = root.querySelectorAll(".carousel-container");
-    for (const carousel of carousels) {
-        carousel.classList.add("show-right-cutoff");
-        const itemsContainer = carousel.getElementsByClassName("carousel-items-container")[0];
-        if (!itemsContainer) continue;
-        const determineSideCutoffs = () => {
-            carousel.classList.toggle("show-left-cutoff", itemsContainer.scrollLeft != 0);
-            carousel.classList.toggle("show-right-cutoff",
-                Math.ceil(itemsContainer.scrollLeft) + itemsContainer.clientWidth < itemsContainer.scrollWidth);
-        };
-        const rateLimited = throttledDebounce(determineSideCutoffs, 20, 100);
-        itemsContainer.addEventListener("scroll", rateLimited);
-    }
-
-    for (const list of root.querySelectorAll(".list.collapsible-container")) {
-        if (list.dataset.collapseAfter === undefined) continue;
-        const collapseAfter = parseInt(list.dataset.collapseAfter);
-        if (collapseAfter == -1 || list.children.length <= collapseAfter) continue;
-        attachExpandToggleButton(list);
-        for (let c = collapseAfter; c < list.children.length; c++) {
-            const child = list.children[c];
-            child.classList.add("collapsible-item");
-            child.style.animationDelay = ((c - collapseAfter) * 20) + "ms";
-        }
-    }
-
-    for (const grid of root.querySelectorAll(".cards-grid.collapsible-container")) {
-        if (grid.dataset.collapseAfterRows === undefined) continue;
-        const collapseAfterRows = parseInt(grid.dataset.collapseAfterRows);
-        if (collapseAfterRows == -1) continue;
-        const getCardsPerRow = () => parseInt(getComputedStyle(grid).getPropertyValue('--cards-per-row'));
-        const button = attachExpandToggleButton(grid);
-        const setCollapsedItems = () => {
-            const collapseAfter = collapseAfterRows * getCardsPerRow();
-            if (grid.children.length <= collapseAfter) {
-                button.style.display = "none";
-                return;
-            }
-            button.style.removeProperty("display");
-            for (let i = 0; i < grid.children.length; i++) {
-                grid.children[i].classList.toggle("collapsible-item", i >= collapseAfter);
-            }
-        };
-        setCollapsedItems();
-    }
-
-    for (const image of root.querySelectorAll("img[loading=lazy]")) {
-        if (image.complete) {
-            image.classList.add("cached");
-            setTimeout(() => image.classList.add("finished-transition"), 1);
-        } else {
-            image.addEventListener("load", () => {
-                image.classList.add("loaded");
-                setTimeout(() => image.classList.add("finished-transition"), 400);
-            });
-        }
-    }
-
-    const relTimeElements = root.querySelectorAll("[data-dynamic-relative-time]");
-    updateRelativeTimeForElements(relTimeElements);
-
-    setTimeout(() => {
-        for (const el of root.querySelectorAll(".text-truncate, .single-line-titles .title, .text-truncate-2-lines, .text-truncate-3-lines")) {
-            if (el.getAttribute("title") === null)
-                el.title = el.innerText.trim().replace(/\s+/g, " ");
-        }
-    }, 50);
+    setupPopovers(root);
+    setupCarousels(root);
+    setupSearchBoxes(root);
+    setupCollapsibleLists(root);
+    setupCollapsibleGrids(root);
+    setupGroups(root);
+    setupLazyImages(root);
+    updateRelativeTimeForElements(root.querySelectorAll("[data-dynamic-relative-time]"));
+    setTimeout(() => setupTruncatedElementTitles(root), 50);
 }
 
 function setupLiveUpdates() {
     if (!pageData.liveUpdates) return;
 
     const baseURL = pageData.baseURL;
+    let showAbsoluteTime = false;
 
     function scheduleWidget(el) {
         const nextUpdate = parseInt(el.dataset.nextUpdate, 10);
@@ -865,6 +869,28 @@ function setupLiveUpdates() {
         const delay = Math.max(0, nextUpdate - Date.now());
         setTimeout(() => refreshWidget(el.dataset.widgetId), delay);
     }
+
+    function formatUpdateTime(timestamp) {
+        if (showAbsoluteTime) {
+            const d = new Date(timestamp);
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            const ss = String(d.getSeconds()).padStart(2, '0');
+            return hh + ':' + mm + ':' + ss;
+        }
+        const delta = Math.round((Date.now() - timestamp) / 1000);
+        if (delta < 60) return delta + 's ago';
+        return Math.floor(delta / 60) + 'm ago';
+    }
+
+    function updateTimestampDisplays() {
+        document.querySelectorAll('.widget-update-time').forEach((el) => {
+            const ts = parseInt(el.dataset.updatedAt, 10);
+            if (ts) el.textContent = formatUpdateTime(ts);
+        });
+    }
+
+    setInterval(updateTimestampDisplays, 1000);
 
     async function refreshWidget(widgetId, force) {
         const el = document.querySelector(`[data-widget-id="${widgetId}"]`);
@@ -886,34 +912,52 @@ function setupLiveUpdates() {
         const newEl = tmp.firstElementChild;
         if (!newEl) return;
 
-        el.replaceWith(newEl);
-        setupWidgetBehaviors(newEl);
-        attachRefreshButton(newEl);
-        scheduleWidget(newEl);
+        const state = captureWidgetState(el);
+        morph(el, newEl);
+        setupWidgetBehaviors(el);
+        attachRefreshControls(el);
+        restoreWidgetState(el, state);
+        scheduleWidget(el);
     }
 
-    function attachRefreshButton(widget) {
+    function attachRefreshControls(widget) {
         const header = widget.querySelector(".widget-header");
         if (!header) return;
         const nextUpdate = parseInt(widget.dataset.nextUpdate, 10);
         if (!nextUpdate) return;
 
-        const btn = document.createElement("button");
-        btn.className = "widget-refresh-button";
-        btn.title = "Refresh widget";
-        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l.262.263A7 7 0 0 0 17 11a.75.75 0 0 0-1.688-.576ZM4.688 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311h-2.433a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.537a.75.75 0 0 0-1.5 0v2.033l-.262-.263A7 7 0 0 0 3 9a.75.75 0 0 0 1.688.576Z" clip-rule="evenodd" /></svg>';
-        btn.addEventListener("click", (e) => {
-            e.preventDefault();
-            btn.classList.add("refreshing");
-            refreshWidget(widget.dataset.widgetId, true);
-        });
-        header.appendChild(btn);
+        if (!header.querySelector('.widget-refresh-button')) {
+            const btn = document.createElement("button");
+            btn.className = "widget-refresh-button";
+            btn.title = "Refresh widget";
+            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l.262.263A7 7 0 0 0 17 11a.75.75 0 0 0-1.688-.576ZM4.688 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311h-2.433a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.537a.75.75 0 0 0-1.5 0v2.033l-.262-.263A7 7 0 0 0 3 9a.75.75 0 0 0 1.688.576Z" clip-rule="evenodd" /></svg>';
+            btn.addEventListener("click", (e) => {
+                e.preventDefault();
+                btn.classList.add("refreshing");
+                refreshWidget(widget.dataset.widgetId, true);
+            });
+            header.appendChild(btn);
+        }
+
+        let timeEl = header.querySelector('.widget-update-time');
+        if (!timeEl) {
+            timeEl = document.createElement("span");
+            timeEl.className = "widget-update-time";
+            timeEl.addEventListener("click", () => {
+                showAbsoluteTime = !showAbsoluteTime;
+                updateTimestampDisplays();
+            });
+            header.appendChild(timeEl);
+        }
+        const now = Date.now();
+        timeEl.dataset.updatedAt = now;
+        timeEl.textContent = formatUpdateTime(now);
     }
 
     afterContentReady(() => {
         document.querySelectorAll('[data-widget-id]').forEach((el) => {
             scheduleWidget(el);
-            attachRefreshButton(el);
+            attachRefreshControls(el);
         });
     });
 }

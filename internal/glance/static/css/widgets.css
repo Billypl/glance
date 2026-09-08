@@ -122,6 +122,24 @@
     to { transform: rotate(360deg); }
 }
 
+.widget-update-time {
+    font-size: var(--font-size-h6);
+    color: var(--color-text-subdue);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity .2s;
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.widget:hover .widget-update-time {
+    opacity: 0.5;
+}
+
+.widget-update-time:hover {
+    opacity: 1 !important;
+}
+
 .widget + .widget {
     margin-top: var(--widget-gap);
 }
