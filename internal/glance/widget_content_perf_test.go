@@ -117,6 +117,35 @@ func TestWidgetContentFreshWidget(t *testing.T) {
 	}
 }
 
+func TestWidgetContentForceRefresh(t *testing.T) {
+	app, wgt, _ := newTestAppWithFakeWidget(time.Now().Add(time.Hour), "<p>forced</p>")
+
+	req := httptest.NewRequest("GET", "/api/widgets/{id}/content/?force=true", nil)
+	req.SetPathValue("id", fmt.Sprintf("%d", wgt.GetID()))
+	w := httptest.NewRecorder()
+	app.handleWidgetContentRequest(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if wgt.updateCount.Load() != 1 {
+		t.Errorf("expected 1 update call with force=true on fresh widget, got %d", wgt.updateCount.Load())
+	}
+}
+
+func TestWidgetContentForceRefreshWithoutFlag(t *testing.T) {
+	app, wgt, _ := newTestAppWithFakeWidget(time.Now().Add(time.Hour), "<p>no-force</p>")
+
+	req := httptest.NewRequest("GET", "/api/widgets/{id}/content/", nil)
+	req.SetPathValue("id", fmt.Sprintf("%d", wgt.GetID()))
+	w := httptest.NewRecorder()
+	app.handleWidgetContentRequest(w, req)
+
+	if wgt.updateCount.Load() != 0 {
+		t.Errorf("expected 0 update calls without force flag, got %d", wgt.updateCount.Load())
+	}
+}
+
 func TestWidgetContentInfiniteCache(t *testing.T) {
 	app, wgt, _ := newTestAppWithFakeWidget(time.Time{}, "<p>static</p>")
 	wgt.cacheType = cacheTypeInfinite

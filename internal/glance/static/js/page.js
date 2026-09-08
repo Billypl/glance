@@ -866,13 +866,14 @@ function setupLiveUpdates() {
         setTimeout(() => refreshWidget(el.dataset.widgetId), delay);
     }
 
-    async function refreshWidget(widgetId) {
+    async function refreshWidget(widgetId, force) {
         const el = document.querySelector(`[data-widget-id="${widgetId}"]`);
         if (!el) return;
 
+        const query = force ? "?force=true" : "";
         let response;
         try {
-            response = await fetch(`${baseURL}/api/widgets/${widgetId}/content/`);
+            response = await fetch(`${baseURL}/api/widgets/${widgetId}/content/${query}`);
         } catch (_) {
             setTimeout(() => refreshWidget(widgetId), 30_000);
             return;
@@ -887,11 +888,33 @@ function setupLiveUpdates() {
 
         el.replaceWith(newEl);
         setupWidgetBehaviors(newEl);
+        attachRefreshButton(newEl);
         scheduleWidget(newEl);
     }
 
+    function attachRefreshButton(widget) {
+        const header = widget.querySelector(".widget-header");
+        if (!header) return;
+        const nextUpdate = parseInt(widget.dataset.nextUpdate, 10);
+        if (!nextUpdate) return;
+
+        const btn = document.createElement("button");
+        btn.className = "widget-refresh-button";
+        btn.title = "Refresh widget";
+        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M15.312 11.424a5.5 5.5 0 0 1-9.201 2.466l-.312-.311h2.433a.75.75 0 0 0 0-1.5H4.598a.75.75 0 0 0-.75.75v3.634a.75.75 0 0 0 1.5 0v-2.033l.262.263A7 7 0 0 0 17 11a.75.75 0 0 0-1.688-.576ZM4.688 8.576a5.5 5.5 0 0 1 9.201-2.466l.312.311h-2.433a.75.75 0 0 0 0 1.5h3.634a.75.75 0 0 0 .75-.75V3.537a.75.75 0 0 0-1.5 0v2.033l-.262-.263A7 7 0 0 0 3 9a.75.75 0 0 0 1.688.576Z" clip-rule="evenodd" /></svg>';
+        btn.addEventListener("click", (e) => {
+            e.preventDefault();
+            btn.classList.add("refreshing");
+            refreshWidget(widget.dataset.widgetId, true);
+        });
+        header.appendChild(btn);
+    }
+
     afterContentReady(() => {
-        document.querySelectorAll('[data-widget-id]').forEach(scheduleWidget);
+        document.querySelectorAll('[data-widget-id]').forEach((el) => {
+            scheduleWidget(el);
+            attachRefreshButton(el);
+        });
     });
 }
 

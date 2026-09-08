@@ -451,10 +451,12 @@ func (a *application) handleWidgetContentRequest(w http.ResponseWriter, r *http.
 
 	p := a.widgetToPage[widgetID]
 
+	force := r.URL.Query().Get("force") == "true"
+
 	var html string
 	p.mu.Lock()
 	now := time.Now()
-	if wgt.requiresUpdate(&now) {
+	if force || wgt.requiresUpdate(&now) {
 		wgt.update(r.Context())
 	}
 	html = string(wgt.Render())
