@@ -844,12 +844,18 @@ function setupLiveUpdates() {
 
     const baseURL = pageData.baseURL;
     let showAbsoluteTime = false;
+    const widgetTimers = new Map();
 
     function scheduleWidget(el) {
+        const widgetId = el.dataset.widgetId;
         const nextUpdate = parseInt(el.dataset.nextUpdate, 10);
         if (!nextUpdate) return;
+        if (widgetTimers.has(widgetId)) clearTimeout(widgetTimers.get(widgetId));
         const delay = Math.max(0, nextUpdate - Date.now());
-        setTimeout(() => refreshWidget(el.dataset.widgetId), delay);
+        widgetTimers.set(widgetId, setTimeout(() => {
+            widgetTimers.delete(widgetId);
+            refreshWidget(widgetId);
+        }, delay));
     }
 
     function formatUpdateTime(timestamp) {
