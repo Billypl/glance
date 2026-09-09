@@ -2,6 +2,8 @@
 // patching nodes positionally in-place so that existing event listeners,
 // scroll positions, and focused elements are preserved as much as possible.
 export function morph(oldEl, newEl) {
+    const prevClasses = new Set(oldEl.classList);
+
     const newAttrs = newEl.attributes;
     for (let i = 0; i < newAttrs.length; i++) {
         const { name, value } = newAttrs[i];
@@ -11,6 +13,11 @@ export function morph(oldEl, newEl) {
     for (const { name } of oldAttrs) {
         if (!newEl.hasAttribute(name)) oldEl.removeAttribute(name);
     }
+
+    for (const cls of prevClasses) {
+        if (!newEl.classList.contains(cls)) oldEl.classList.add(cls);
+    }
+
     morphChildren(oldEl, newEl);
 }
 

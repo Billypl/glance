@@ -345,12 +345,13 @@ function attachExpandToggleButton(collapsibleContainer) {
     const showMoreText = "Show more";
     const showLessText = "Show less";
 
-    let expanded = false;
+    let expanded = collapsibleContainer.classList.contains("container-expanded");
     const button = document.createElement("button");
     const icon = document.createElement("span");
     icon.classList.add("expand-toggle-button-icon");
-    const textNode = document.createTextNode(showMoreText);
+    const textNode = document.createTextNode(expanded ? showLessText : showMoreText);
     button.classList.add("expand-toggle-button");
+    if (expanded) button.classList.add("container-expanded");
     button.append(textNode, icon);
     button.addEventListener("click", () => {
         expanded = !expanded;
@@ -806,14 +807,6 @@ function captureWidgetState(el) {
         state.carouselScrolls = Array.from(carousels, c => c.scrollLeft);
     }
 
-    const expanded = el.querySelectorAll('.collapsible-container.container-expanded');
-    if (expanded.length > 0) {
-        const allContainers = el.querySelectorAll('.collapsible-container');
-        state.expandedIndices = Array.from(expanded, exp =>
-            Array.from(allContainers).indexOf(exp)
-        );
-    }
-
     return state;
 }
 
@@ -832,17 +825,6 @@ function restoreWidgetState(el, state) {
         });
     }
 
-    if (state.expandedIndices) {
-        const allContainers = el.querySelectorAll('.collapsible-container');
-        for (const idx of state.expandedIndices) {
-            const container = allContainers[idx];
-            if (!container) continue;
-            const toggle = container.nextElementSibling;
-            if (toggle && toggle.classList.contains('expand-toggle-button')) {
-                toggle.click();
-            }
-        }
-    }
 }
 
 function setupWidgetBehaviors(root) {
