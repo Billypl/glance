@@ -113,6 +113,60 @@ func TestWidgetContentResponseContainsDataWidgetID(t *testing.T) {
 	}
 }
 
+func TestWidgetContentConsecutiveFetchesAreStructurallyConsistent(t *testing.T) {
+	app := newTestApp()
+
+	wgt := &monitorWidget{}
+	wgt.setID(widgetIDCounter.Add(1))
+	wgt.withError(nil)
+	p := &page{}
+
+	app.widgetByID[wgt.GetID()] = wgt
+	app.widgetToPage[wgt.GetID()] = p
+
+	bodies := make([]string, 3)
+	for i := range bodies {
+		req := httptest.NewRequest("GET", "/api/widgets/{id}/content/", nil)
+		req.SetPathValue("id", fmt.Sprintf("%d", wgt.GetID()))
+		w := httptest.NewRecorder()
+		app.handleWidgetContentRequest(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("fetch %d: expected 200, got %d", i, w.Code)
+		}
+		bodies[i] = w.Body.String()
+	}
+
+	expectedID := fmt.Sprintf(`data-widget-id="%d"`, wgt.GetID())
+	for i, body := range bodies {
+		if !strings.Contains(body, expectedID) {
+			t.Errorf("fetch %d: missing %s", i, expectedID)
+		}
+		if !strings.Contains(body, "data-next-update=") {
+			t.Errorf("fetch %d: missing data-next-update", i)
+		}
+	}
+
+	rootTag := func(html string) string {
+		idx := strings.Index(html, "<")
+		if idx == -1 {
+			return ""
+		}
+		end := strings.IndexAny(html[idx+1:], " \t\n>")
+		if end == -1 {
+			return ""
+		}
+		return html[idx+1 : idx+1+end]
+	}
+
+	tag0 := rootTag(bodies[0])
+	for i := 1; i < len(bodies); i++ {
+		if tagI := rootTag(bodies[i]); tagI != tag0 {
+			t.Errorf("fetch %d root tag %q differs from fetch 0 root tag %q", i, tagI, tag0)
+		}
+	}
+}
+
 func TestWidgetContentResponseContainsDataNextUpdate(t *testing.T) {
 	app := newTestApp()
 

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Event Listener Dedup Test</title>
+    <style>
+        body { font-family: monospace; margin: 2rem; background: #1a1a2e; color: #e0e0e0; }
+        .pass { color: #4caf50; }
+        .fail { color: #f44336; }
+        #results { white-space: pre; line-height: 1.8; }
+    </style>
+</head>
+<body>
+<h2>Event Listener Dedup Tests</h2>
+<div id="results"></div>
+
+<script>
+const results = document.getElementById('results');
+let passed = 0;
+let failed = 0;
+
+function assert(name, condition) {
+    if (condition) {
+        results.innerHTML += `<span class="pass">PASS</span>  ${name}\n`;
+        passed++;
+    } else {
+        results.innerHTML += `<span class="fail">FAIL</span>  ${name}\n`;
+        failed++;
+    }
+}
+
+function countEventFirings(element, eventType) {
+    let count = 0;
+    element.addEventListener(eventType, () => count++);
+    element.dispatchEvent(new Event(eventType));
+    return count;
+}
+
+// --- Test: WeakSet prevents duplicate listener registration ---
+
+function testWeakSetDedup() {
+    const inited = new WeakSet();
+
+    function setupHandler(root) {
+        const elements = root.querySelectorAll('.target');
+        for (const el of elements) {
+            if (inited.has(el)) continue;
+            inited.add(el);
+            el.addEventListener('click', () => { el.__clickCount = (el.__clickCount || 0) + 1; });
+        }
+    }
+
+    const container = document.createElement('div');
+    container.innerHTML = '<div class="target"></div><div class="target"></div>';
+    document.body.appendChild(container);
+
+    // Call setupHandler 5 times (simulating 5 morph+setupWidgetBehaviors cycles)
+    for (let i = 0; i < 5; i++) {
+        setupHandler(container);
+    }
+
+    const targets = container.querySelectorAll('.target');
+    targets.forEach(t => t.dispatchEvent(new Event('click')));
+
+    assert(
+        'WeakSet dedup: click fires 1x after 5 setup calls',
+        targets[0].__clickCount === 1 && targets[1].__clickCount === 1
+    );
+
+    container.remove();
+}
+
+// --- Test: Without dedup, listeners accumulate ---
+
+function testWithoutDedup() {
+    function setupHandlerNaive(root) {
+        const elements = root.querySelectorAll('.target');
+        for (const el of elements) {
+            el.addEventListener('click', () => { el.__clickCount = (el.__clickCount || 0) + 1; });
+        }
+    }
+
+    const container = document.createElement('div');
+    container.innerHTML = '<div class="target"></div>';
+    document.body.appendChild(container);
+
+    for (let i = 0; i < 5; i++) {
+        setupHandlerNaive(container);
+    }
+
+    const target = container.querySelector('.target');
+    target.dispatchEvent(new Event('click'));
+
+    assert(
+        'Without dedup: click fires 5x after 5 setup calls (proves problem exists)',
+        target.__clickCount === 5
+    );
+
+    container.remove();
+}
+
+// --- Test: WeakSet allows init on replaced elements (new DOM nodes after morph replace) ---
+
+function testWeakSetAllowsReplacedElements() {
+    const inited = new WeakSet();
+
+    function setupHandler(root) {
+        const elements = root.querySelectorAll('.target');
+        for (const el of elements) {
+            if (inited.has(el)) continue;
+            inited.add(el);
+            el.addEventListener('click', () => { el.__clickCount = (el.__clickCount || 0) + 1; });
+        }
+    }
+
+    const container = document.createElement('div');
+    container.innerHTML = '<div class="target"></div>';
+    document.body.appendChild(container);
+
+    // First init
+    setupHandler(container);
+
+    // Simulate morph replacing the element (new DOM node at same position)
+    const oldTarget = container.querySelector('.target');
+    const newTarget = document.createElement('div');
+    newTarget.className = 'target';
+    container.replaceChild(newTarget, oldTarget);
+
+    // Second init — new element should get initialized
+    setupHandler(container);
+
+    newTarget.dispatchEvent(new Event('click'));
+    assert(
+        'WeakSet: replaced element gets new handler (not blocked by old reference)',
+        newTarget.__clickCount === 1
+    );
+
+    // Old element's handler is gone (element removed from DOM)
+    oldTarget.__clickCount = 0;
+    oldTarget.dispatchEvent(new Event('click'));
+    assert(
+        'WeakSet: old element still has its handler (not affected)',
+        oldTarget.__clickCount === 1
+    );
+
+    container.remove();
+}
+
+// --- Test: WeakSet preserves element through morph-like attribute update ---
+
+function testWeakSetPreservesElementThroughMorph() {
+    const inited = new WeakSet();
+
+    function setupHandler(root) {
+        const elements = root.querySelectorAll('.target');
+        for (const el of elements) {
+            if (inited.has(el)) continue;
+            inited.add(el);
+            el.addEventListener('click', () => { el.__clickCount = (el.__clickCount || 0) + 1; });
+        }
+    }
+
+    const container = document.createElement('div');
+    container.innerHTML = '<div class="target" data-value="old"></div>';
+    document.body.appendChild(container);
+
+    // First init
+    setupHandler(container);
+
+    // Simulate morph: update attributes but keep same element reference
+    const target = container.querySelector('.target');
+    target.setAttribute('data-value', 'new');
+    target.classList.add('extra-class');
+
+    // Second init — same element, should be skipped
+    setupHandler(container);
+
+    target.dispatchEvent(new Event('click'));
+    assert(
+        'WeakSet: morphed-in-place element skipped (handler fires 1x)',
+        target.__clickCount === 1
+    );
+
+    container.remove();
+}
+
+// --- Test: WeakMap for ResizeObserver cleanup ---
+
+function testWeakMapObserverCleanup() {
+    const observers = new WeakMap();
+    let observeCount = 0;
+
+    function setupObserver(root) {
+        const elements = root.querySelectorAll('.grid');
+        for (const el of elements) {
+            const prev = observers.get(el);
+            if (prev) prev.disconnect();
+
+            const observer = new ResizeObserver(() => { observeCount++; });
+            observers.set(el, observer);
+            observer.observe(el);
+        }
+    }
+
+    const container = document.createElement('div');
+    container.innerHTML = '<div class="grid" style="width:100px"></div>';
+    document.body.appendChild(container);
+
+    // Call setup 3 times
+    for (let i = 0; i < 3; i++) {
+        setupObserver(container);
+    }
+
+    // Only 1 observer should be active (previous ones disconnected)
+    const grid = container.querySelector('.grid');
+    const currentObserver = observers.get(grid);
+    assert(
+        'WeakMap: observer exists for grid element',
+        currentObserver !== undefined
+    );
+
+    container.remove();
+}
+
+// Run all tests
+testWeakSetDedup();
+testWithoutDedup();
+testWeakSetAllowsReplacedElements();
+testWeakSetPreservesElementThroughMorph();
+testWeakMapObserverCleanup();
+
+results.innerHTML += `\n${passed + failed} tests: `;
+results.innerHTML += `<span class="pass">${passed} passed</span>`;
+if (failed > 0) results.innerHTML += `, <span class="fail">${failed} failed</span>`;
+results.innerHTML += '\n';
+</script>
+</body>
+</html>

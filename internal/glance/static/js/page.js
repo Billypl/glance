@@ -13,6 +13,7 @@ async function fetchPageContent(pageData) {
     return content;
 }
 
+const _carouselInited = new WeakSet();
 function setupCarousels(root = document) {
     const carouselElements = root.getElementsByClassName("carousel-container");
 
@@ -22,6 +23,8 @@ function setupCarousels(root = document) {
 
     for (let i = 0; i < carouselElements.length; i++) {
         const carousel = carouselElements[i];
+        if (_carouselInited.has(carousel)) continue;
+        _carouselInited.add(carousel);
         carousel.classList.add("show-right-cutoff");
         const itemsContainer = carousel.getElementsByClassName("carousel-items-container")[0];
 
@@ -96,6 +99,7 @@ function updateRelativeTimeForElements(elements)
     }
 }
 
+const _searchInited = new WeakSet();
 function setupSearchBoxes(root = document) {
     const searchWidgets = root.getElementsByClassName("search");
 
@@ -105,6 +109,8 @@ function setupSearchBoxes(root = document) {
 
     for (let i = 0; i < searchWidgets.length; i++) {
         const widget = searchWidgets[i];
+        if (_searchInited.has(widget)) continue;
+        _searchInited.add(widget);
         const defaultSearchUrl = widget.dataset.defaultSearchUrl;
         const target = widget.dataset.target || "_blank";
         const newTab = widget.dataset.newTab === "true";
@@ -250,6 +256,7 @@ function setupDynamicRelativeTime() {
     });
 }
 
+const _groupInited = new WeakSet();
 function setupGroups(root = document) {
     const groups = root.getElementsByClassName("widget-type-group");
 
@@ -259,6 +266,8 @@ function setupGroups(root = document) {
 
     for (let g = 0; g < groups.length; g++) {
         const group = groups[g];
+        if (_groupInited.has(group)) continue;
+        _groupInited.add(group);
         const titles = group.getElementsByClassName("widget-header")[0].children;
         const tabs = group.getElementsByClassName("widget-group-contents")[0].children;
         let current = 0;
@@ -310,6 +319,7 @@ function setupGroups(root = document) {
     }
 }
 
+const _lazyImageInited = new WeakSet();
 function setupLazyImages(root = document) {
     const images = root.querySelectorAll("img[loading=lazy]");
 
@@ -325,6 +335,8 @@ function setupLazyImages(root = document) {
         setTimeout(() => {
             for (let i = 0; i < images.length; i++) {
                 const image = images[i];
+                if (_lazyImageInited.has(image)) continue;
+                _lazyImageInited.add(image);
 
                 if (image.complete) {
                     image.classList.add("cached");
@@ -420,6 +432,7 @@ function setupCollapsibleLists(root = document) {
     }
 }
 
+const _gridObservers = new WeakMap();
 function setupCollapsibleGrids(root = document) {
     const collapsibleGridElements = root.querySelectorAll(".cards-grid.collapsible-container");
 
@@ -439,6 +452,9 @@ function setupCollapsibleGrids(root = document) {
         if (collapseAfterRows == -1) {
             continue;
         }
+
+        const prevObserver = _gridObservers.get(gridElement);
+        if (prevObserver) prevObserver.disconnect();
 
         const getCardsPerRow = () => {
             return parseInt(getComputedStyle(gridElement).getPropertyValue('--cards-per-row'));
@@ -491,7 +507,13 @@ function setupCollapsibleGrids(root = document) {
             resolveCollapsibleItems();
         });
 
-        afterContentReady(() => observer.observe(gridElement));
+        _gridObservers.set(gridElement, observer);
+
+        if (prevObserver) {
+            observer.observe(gridElement);
+        } else {
+            afterContentReady(() => observer.observe(gridElement));
+        }
     }
 }
 
@@ -878,7 +900,34 @@ function setupLiveUpdates() {
         });
     }
 
-    setInterval(updateTimestampDisplays, 1000);
+    let timestampInterval = setInterval(updateTimestampDisplays, 1000);
+
+    function pauseAllPolling() {
+        for (const [id, timerId] of widgetTimers) {
+            clearTimeout(timerId);
+        }
+        widgetTimers.clear();
+        clearInterval(timestampInterval);
+        timestampInterval = null;
+    }
+
+    function resumeAllPolling() {
+        document.querySelectorAll('[data-widget-id]').forEach(scheduleWidget);
+        if (!timestampInterval) {
+            updateTimestampDisplays();
+            timestampInterval = setInterval(updateTimestampDisplays, 1000);
+        }
+    }
+
+    if (document.hidden !== undefined) {
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) {
+                pauseAllPolling();
+            } else {
+                resumeAllPolling();
+            }
+        });
+    }
 
     async function refreshWidget(widgetId, force) {
         const el = document.querySelector(`[data-widget-id="${widgetId}"]`);

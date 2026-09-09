@@ -184,11 +184,14 @@ function handleHidePopoverOnEscape(event) {
     }
 }
 
+const _popoverTargetInited = new WeakSet();
 export function setupPopovers(root = document) {
     const targets = root.querySelectorAll("[data-popover-type]");
 
     for (let i = 0; i < targets.length; i++) {
         const target = targets[i];
+        if (_popoverTargetInited.has(target)) continue;
+        _popoverTargetInited.add(target);
 
         if (target.dataset.popoverTrigger === "click") {
             target.addEventListener("click", handleMouseEnter);
