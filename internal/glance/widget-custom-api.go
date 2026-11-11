@@ -36,6 +36,7 @@ type CustomAPIRequest struct {
 	Body               any                  `yaml:"body"`
 	MockResponse       string               `yaml:"mock-response"`
 	SkipJSONValidation bool                 `yaml:"skip-json-validation"`
+	AllowFailure       bool                 `yaml:"allow-failure"`
 	BasicAuth          struct {
 		Username string `yaml:"username"`
 		Password string `yaml:"password"`
@@ -206,6 +207,12 @@ func (req *CustomAPIRequest) initialize() error {
 type customAPIResponseData struct {
 	JSON     decoratedGJSONResult
 	Response *http.Response
+	// Error is set instead of failing the widget when a request with allow-failure fails
+	Error string
+}
+
+func (data *customAPIResponseData) Failed() bool {
+	return data.Error != ""
 }
 
 type customAPITemplateData struct {
@@ -237,6 +244,22 @@ func (data *customAPITemplateData) Subrequest(key string) *customAPIResponseData
 	}
 
 	return req
+}
+
+// fetchCustomAPIResponseOrFailure fetches req; when req has allow-failure, a failed request yields empty
+// data with Error set instead of an error, so that it doesn't fail the whole widget
+func fetchCustomAPIResponseOrFailure(ctx context.Context, req *CustomAPIRequest) (*customAPIResponseData, error) {
+	data, err := fetchCustomAPIResponse(ctx, req)
+	// ctx.Err: cancelled because another request failed, the widget fails anyway
+	if err != nil && req != nil && req.AllowFailure && ctx.Err() == nil {
+		return &customAPIResponseData{
+			JSON:     decoratedGJSONResult{gjson.Result{}},
+			Response: &http.Response{},
+			Error:    err.Error(),
+		}, nil
+	}
+
+	return data, err
 }
 
 func fetchCustomAPIResponse(ctx context.Context, req *CustomAPIRequest) (*customAPIResponseData, error) {
@@ -307,7 +330,7 @@ func fetchAndRenderCustomAPIRequest(
 
 	if len(subReqs) == 0 {
 		// If there are no subrequests, we can fetch the primary request in a much simpler way
-		primaryData, err = fetchCustomAPIResponse(context.Background(), primaryReq)
+		primaryData, err = fetchCustomAPIResponseOrFailure(context.Background(), primaryReq)
 	} else {
 		// If there are subrequests, we need to fetch them concurrently
 		// and cancel all requests if any of them fail. There's probably
@@ -322,7 +345,7 @@ func fetchAndRenderCustomAPIRequest(
 		go func() {
 			defer wg.Done()
 			var localErr error
-			primaryData, localErr = fetchCustomAPIResponse(ctx, primaryReq)
+			primaryData, localErr = fetchCustomAPIResponseOrFailure(ctx, primaryReq)
 			mu.Lock()
 			if localErr != nil && err == nil {
 				err = localErr
@@ -337,7 +360,7 @@ func fetchAndRenderCustomAPIRequest(
 				defer wg.Done()
 				var localErr error
 				var data *customAPIResponseData
-				data, localErr = fetchCustomAPIResponse(ctx, req)
+				data, localErr = fetchCustomAPIResponseOrFailure(ctx, req)
 				mu.Lock()
 				if localErr == nil {
 					subData[key] = data

@@ -1595,6 +1595,7 @@ Examples:
 | frameless | boolean | no | false |
 | allow-insecure | boolean | no | false |
 | skip-json-validation | boolean | no | false |
+| allow-failure | boolean | no | false |
 | template | string | yes | |
 | options | map | no | |
 | parameters | key (string) & value (string|array) | no | |
@@ -1645,6 +1646,16 @@ Whether to ignore invalid/self-signed certificates.
 
 ##### `skip-json-validation`
 When set to `true`, skips the JSON validation step. This is useful when the API returns JSON Lines/newline-delimited JSON, which is a format that consists of several JSON objects separated by newlines.
+
+##### `allow-failure`
+When set to `true`, a failed request (unreachable host, timeout, invalid JSON, non-JSON error page) doesn't fail the whole widget. The template runs with empty data for that request instead and `.Failed` is `true`, with the reason in `.Error`. Can be set on the primary request and on each subrequest, e.g. to keep showing the rest of a widget while one of its sources is offline:
+
+```yaml
+url: http://pc.lan:8091/status
+allow-failure: true
+template: |
+  {{ if .Failed }}PC asleep{{ else }}PC awake · {{ .JSON.String "os" }}{{ end }}
+```
 
 ##### `template`
 The template that will be used to display the data. It relies on Go's `html/template` package so it's recommended to go through [its documentation](https://pkg.go.dev/text/template) to understand how to do basic things such as conditionals, loops, etc. In addition, it also uses [tidwall's gjson](https://github.com/tidwall/gjson) package to parse the JSON data so it's worth going through its documentation if you want to use more advanced JSON selectors. You can view additional examples with explanations and function definitions [here](custom-api.md).
