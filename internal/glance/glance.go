@@ -530,7 +530,9 @@ func (a *application) server() (func() error, func() error) {
 	var absAssetsPath string
 	if a.Config.Server.AssetsPath != "" {
 		absAssetsPath, _ = filepath.Abs(a.Config.Server.AssetsPath)
-		assetsFS := fileServerWithCache(http.Dir(a.Config.Server.AssetsPath), 2*time.Hour)
+		// no-cache: browsers keep the files but ask each time (a 304 while unchanged), so an edited
+		// custom script or stylesheet is picked up on the next load, whatever URL the config uses
+		assetsFS := fileServerWithCacheControl(http.Dir(a.Config.Server.AssetsPath), "no-cache")
 		mux.Handle("/assets/{path...}", http.StripPrefix("/assets/", assetsFS))
 	}
 

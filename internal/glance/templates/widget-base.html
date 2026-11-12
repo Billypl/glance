@@ -1,4 +1,4 @@
-<div class="widget widget-type-{{ .GetType }}{{ if .CSSClass }} {{ .CSSClass }}{{ end }}" data-widget-id="{{ .GetID }}" data-next-update="{{ .NextUpdateUnixMilli }}">
+<div class="widget widget-type-{{ .GetType }}{{ if .CSSClass }} {{ .CSSClass }}{{ end }}" data-widget-id="{{ .GetID }}" data-next-update="{{ .NextUpdateUnixMilli }}" data-update-in="{{ .UpdateInMilli }}">
     {{- if not .HideHeader }}
     <div class="widget-header">
         {{- if ne "" .TitleURL }}
