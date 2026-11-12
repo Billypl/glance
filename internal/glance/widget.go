@@ -181,6 +181,15 @@ func (w *widgetBase) NextUpdateUnixMilli() int64 {
 	return w.nextUpdate.UnixMilli()
 }
 
+// UpdateInMilli is how long until the next update, from the moment of rendering. Clients schedule
+// with it rather than with NextUpdateUnixMilli, so a client clock that is off doesn't matter.
+func (w *widgetBase) UpdateInMilli() int64 {
+	if w.cacheType == cacheTypeInfinite || w.nextUpdate.IsZero() {
+		return 0
+	}
+	return max(time.Until(w.nextUpdate).Milliseconds(), 0)
+}
+
 func (w *widgetBase) requiresUpdate(now *time.Time) bool {
 	if w.cacheType == cacheTypeInfinite {
 		return false

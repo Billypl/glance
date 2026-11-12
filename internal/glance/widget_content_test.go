@@ -3,9 +3,12 @@ package glance
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newTestApp() *application {
@@ -186,5 +189,56 @@ func TestWidgetContentResponseContainsDataNextUpdate(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "data-next-update=") {
 		t.Errorf("response missing data-next-update attribute; body: %s", body)
+	}
+}
+
+func TestUpdateInMilliIsRelativeToRendering(t *testing.T) {
+	wgt := newFakeWidget(time.Now().Add(30*time.Second), "")
+	if in := wgt.UpdateInMilli(); in < 29_000 || in > 30_000 {
+		t.Errorf("UpdateInMilli = %d, want about 30000", in)
+	}
+
+	wgt.nextUpdate = time.Now().Add(-time.Second)
+	if in := wgt.UpdateInMilli(); in != 0 {
+		t.Errorf("UpdateInMilli for a past update = %d, want 0", in)
+	}
+
+	wgt.cacheType = cacheTypeInfinite
+	if in := wgt.UpdateInMilli(); in != 0 {
+		t.Errorf("UpdateInMilli for infinite cache = %d, want 0", in)
+	}
+}
+
+func TestWidgetContentResponseContainsDataUpdateIn(t *testing.T) {
+	app, wgt, _ := newTestAppWithFakeWidget(time.Now().Add(time.Minute), "")
+	body := requestWidget(app, wgt.GetID()).Body.String()
+	if !strings.Contains(body, `data-update-in="`) {
+		t.Errorf("response missing data-update-in attribute; body: %s", body)
+	}
+}
+
+func TestUserAssetsAreRevalidated(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "custom.js"), []byte("1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := http.StripPrefix("/assets/", fileServerWithCacheControl(http.Dir(dir), "no-cache"))
+
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/assets/custom.js", nil))
+	if cc := w.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("Cache-Control = %q, want no-cache", cc)
+	}
+	lastModified := w.Header().Get("Last-Modified")
+	if lastModified == "" {
+		t.Fatal("missing Last-Modified, browsers could not revalidate")
+	}
+
+	req := httptest.NewRequest("GET", "/assets/custom.js", nil)
+	req.Header.Set("If-Modified-Since", lastModified)
+	w = httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusNotModified {
+		t.Errorf("unchanged file: status %d, want 304", w.Code)
 	}
 }

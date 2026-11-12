@@ -768,6 +768,19 @@ function initThemePicker() {
     })
 }
 
+// Each widget's HTML as the server last sent it: live updates patch only what the server changed
+// since then (see morph), and schedule from when it arrived.
+const serverWidgets = new Map();
+
+function rememberServerWidgets(html, receivedAt) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    const widgets = tmp.querySelectorAll('[data-widget-id]');
+    for (let i = 0; i < widgets.length; i++) {
+        serverWidgets.set(widgets[i].dataset.widgetId, { el: widgets[i], receivedAt });
+    }
+}
+
 async function setupPage() {
     initThemePicker();
 
@@ -776,6 +789,7 @@ async function setupPage() {
     const pageContent = await fetchPageContent(pageData);
 
     pageContentElement.innerHTML = pageContent;
+    if (pageData.liveUpdates) rememberServerWidgets(pageContent, Date.now());
 
     try {
         setupPopovers();
@@ -868,12 +882,20 @@ function setupLiveUpdates() {
     let showAbsoluteTime = false;
     const widgetTimers = new Map();
 
+    // Never sooner than this after scheduling, even if the server says the update is overdue
+    const MIN_DELAY = 1000;
+
     function scheduleWidget(el) {
         const widgetId = el.dataset.widgetId;
         const nextUpdate = parseInt(el.dataset.nextUpdate, 10);
         if (!nextUpdate) return;
         if (widgetTimers.has(widgetId)) clearTimeout(widgetTimers.get(widgetId));
-        const delay = Math.max(0, nextUpdate - Date.now());
+        // data-update-in counts from when the server rendered the widget, so the client's clock
+        // being off doesn't matter; data-next-update is the server's clock
+        const updateIn = parseInt(el.dataset.updateIn, 10);
+        const server = serverWidgets.get(widgetId);
+        const due = !isNaN(updateIn) && server ? server.receivedAt + updateIn : nextUpdate;
+        const delay = Math.max(MIN_DELAY, due - Date.now());
         widgetTimers.set(widgetId, setTimeout(() => {
             widgetTimers.delete(widgetId);
             refreshWidget(widgetId);
@@ -944,17 +966,22 @@ function setupLiveUpdates() {
         if (!response.ok) return;
 
         const html = await response.text();
+        const receivedAt = Date.now();
         const tmp = document.createElement('div');
         tmp.innerHTML = html;
         const newEl = tmp.firstElementChild;
         if (!newEl) return;
 
         const state = captureWidgetState(el);
-        morph(el, newEl);
+        const prev = serverWidgets.get(widgetId);
+        morph(el, newEl, prev && prev.el);
+        rememberServerWidgets(html, receivedAt);
         setupWidgetBehaviors(el);
         attachRefreshControls(el);
         restoreWidgetState(el, state);
         scheduleWidget(el);
+        // for user scripts (document.head) that fill in widgets
+        el.dispatchEvent(new CustomEvent('widget-updated', { bubbles: true }));
     }
 
     function attachRefreshControls(widget) {

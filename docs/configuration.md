@@ -363,7 +363,13 @@ icon: /assets/gitea-icon.png
 ```
 
 #### `live-updates`
-When set to `true`, each widget on the page is automatically refreshed in the browser when its cached data expires, without requiring a full page reload. The server embeds the next-refresh timestamp into the rendered HTML; the browser reads it and schedules a fetch for that exact moment.
+When set to `true`, each widget on the page is automatically refreshed in the browser when its cached data expires, without requiring a full page reload. The server embeds the time left until the next refresh into the rendered HTML; the browser counts it from when the response arrived, so a browser clock that is off doesn't cause early or repeated fetches.
+
+A refresh patches only what the server changed since the widget's previous version, so whatever your own scripts filled in (for example a clock in a `custom-api` template) stays unless the server changed that part. After each refresh, the widget element fires a bubbling `widget-updated` event:
+
+```js
+document.addEventListener('widget-updated', (e) => { /* e.target is the refreshed .widget */ });
+```
 
 This is useful for dashboards left open on a wall display or second monitor. It is disabled by default — when disabled, behavior is identical to today, with no additional goroutines or endpoints.
 
@@ -380,6 +386,8 @@ document:
   head: |
     <script src="/assets/custom.js"></script>
 ```
+
+Files under `assets-path` are served with `Cache-Control: no-cache`: browsers keep them but check for changes on each load, so an edited script or stylesheet takes effect on the next reload.
 
 ## Branding
 You can adjust the various parts of the branding through a top level `branding` property. Example:

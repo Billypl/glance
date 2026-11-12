@@ -32,8 +32,8 @@ func (w *fakeWidget) initialize() error { return nil }
 
 func (w *fakeWidget) Render() template.HTML {
 	return template.HTML(fmt.Sprintf(
-		`<div class="widget" data-widget-id="%d" data-next-update="%d">%s</div>`,
-		w.GetID(), w.NextUpdateUnixMilli(), w.renderedHTML,
+		`<div class="widget" data-widget-id="%d" data-next-update="%d" data-update-in="%d">%s</div>`,
+		w.GetID(), w.NextUpdateUnixMilli(), w.UpdateInMilli(), w.renderedHTML,
 	))
 }
 
