@@ -91,6 +91,15 @@ function timestampToRelativeTime(timestamp) {
     return prefix + Math.floor(delta / yearInSeconds) + "y";
 }
 
+// The exact time for the tooltip: "11:17, 13.11", with the year when it isn't this year
+function timestampToExactTime(timestamp) {
+    const d = new Date(timestamp * 1000);
+    const pad = (n) => String(n).padStart(2, "0");
+    let out = pad(d.getHours()) + ":" + pad(d.getMinutes()) + ", " + pad(d.getDate()) + "." + pad(d.getMonth() + 1);
+    if (d.getFullYear() !== new Date().getFullYear()) out += "." + d.getFullYear();
+    return out;
+}
+
 function updateRelativeTimeForElements(elements)
 {
     for (let i = 0; i < elements.length; i++)
@@ -102,6 +111,7 @@ function updateRelativeTimeForElements(elements)
             continue
 
         element.textContent = timestampToRelativeTime(timestamp);
+        element.title = timestampToExactTime(timestamp);
     }
 }
 
