@@ -57,6 +57,11 @@ const dayInSeconds = hourInSeconds * 24;
 const monthInSeconds = dayInSeconds * 30.4;
 const yearInSeconds = dayInSeconds * 365;
 
+function twoUnits(delta, big, bigLabel, small, smallLabel) {
+    const rest = Math.floor((delta % big) / small);
+    return Math.floor(delta / big) + bigLabel + (rest > 0 ? " " + rest + smallLabel : "");
+}
+
 function timestampToRelativeTime(timestamp) {
     let delta = Math.round((Date.now() / 1000) - timestamp);
     let prefix = "";
@@ -72,11 +77,12 @@ function timestampToRelativeTime(timestamp) {
     if (delta < hourInSeconds) {
         return prefix + Math.floor(delta / minuteInSeconds) + "m";
     }
+    // Hours and days also show the next smaller unit ("1d 5h", "3h 20m"), unless it is zero
     if (delta < dayInSeconds) {
-        return prefix + Math.floor(delta / hourInSeconds) + "h";
+        return prefix + twoUnits(delta, hourInSeconds, "h", minuteInSeconds, "m");
     }
     if (delta < monthInSeconds) {
-        return prefix + Math.floor(delta / dayInSeconds) + "d";
+        return prefix + twoUnits(delta, dayInSeconds, "d", hourInSeconds, "h");
     }
     if (delta < yearInSeconds) {
         return prefix + Math.floor(delta / monthInSeconds) + "mo";
